@@ -1,3 +1,4 @@
+from picamera2 import Picamera2
 import cv2
 import numpy as np
 import mediapipe as mp
@@ -30,14 +31,14 @@ CONSEC_FRAMES = 20
 # Initialize frame counter
 counter = 0
 
-# Start capturing video
-cap = cv2.VideoCapture(0)
+# Set up PiCamera
+picam2 = Picamera2()
+picam2.start()
 
-while cap.isOpened():
-    ret, frame = cap.read()
-    if not ret:
-        break
-    
+while True:
+    # Capture frame from PiCamera
+    frame = picam2.capture_array()
+
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = face_mesh.process(frame_rgb)
     
@@ -73,5 +74,5 @@ while cap.isOpened():
     if cv2.waitKey(1) & 0xFF == 27:
         break
 
-cap.release()
 cv2.destroyAllWindows()
+picam2.stop()
