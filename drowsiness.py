@@ -2,6 +2,15 @@ import cv2
 import numpy as np
 import mediapipe as mp
 from scipy.spatial import distance as dist
+import RPi.GPIO as GPIO
+import time
+
+# Setup GPIO for motor control
+MOTOR_PIN = 18  # Use PWM on this pin to control speed
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(MOTOR_PIN, GPIO.OUT)
+pwm = GPIO.PWM(MOTOR_PIN, 100)  # PWM at 100Hz
+pwm.start(0)  # Start with 0% duty cycle (motor off)
 
 # Initialize Mediapipe FaceMesh
 mp_face_mesh = mp.solutions.face_mesh
@@ -29,49 +38,66 @@ CONSEC_FRAMES = 20
 
 # Initialize frame counter
 counter = 0
+motor_running = True  # Initially, the motor is running
+
+# Function to control motor speed
+def control_motor(drowsy):
+    if drowsy:
+        pwm.ChangeDutyCycle(0)  # Stop the motor if drowsy
+        print("Motor stopped due to drowsiness.")
+    else:
+        pwm.ChangeDutyCycle(70)  # Set motor speed to 70% when not drowsy
+        print("Motor running.")
 
 # Start capturing video
 cap = cv2.VideoCapture(0)
 
-while cap.isOpened():
-    ret, frame = cap.read()
-    if not ret:
-        break
-    
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    results = face_mesh.process(frame_rgb)
-    
-    if results.multi_face_landmarks:
-        for face_landmarks in results.multi_face_landmarks:
-            h, w, _ = frame.shape
-            landmarks = [(int(point.x * w), int(point.y * h)) for point in face_landmarks.landmark]
-            
-            left_eye = [landmarks[idx] for idx in LEFT_EYE_INDICES]
-            right_eye = [landmarks[idx] for idx in RIGHT_EYE_INDICES]
-            
-            left_ear = compute_ear(left_eye)
-            right_ear = compute_ear(right_eye)
-            
-            ear = (left_ear + right_ear) / 2.0
-            
-            # Draw eye landmarks
-            for (x, y) in left_eye:
-                cv2.circle(frame, (x, y), 2, (0, 255, 0), -1)
-            for (x, y) in right_eye:
-                cv2.circle(frame, (x, y), 2, (0, 255, 0), -1)
-            
-            # Check if EAR is below the threshold
-            if ear < EAR_THRESHOLD:
-                counter += 1
-                if counter >= CONSEC_FRAMES:
-                    cv2.putText(frame, "DROWSINESS DETECTED!", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            else:
-                counter = 0
-    
-    cv2.imshow("Drowsiness Detection", frame)
-    
-    if cv2.waitKey(1) & 0xFF == 27:
-        break
+try:
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = face_mesh.process(frame_rgb)
+        
+        if results.multi_face_landmarks:
+            for face_landmarks in results.multi_face_landmarks:
+                h, w, _ = frame.shape
+                landmarks = [(int(point.x * w), int(point.y * h)) for point in face_landmarks.landmark]
+                
+                left_eye = [landmarks[idx] for idx in LEFT_EYE_INDICES]
+                right_eye = [landmarks[idx] for idx in RIGHT_EYE_INDICES]
+                
+                left_ear = compute_ear(left_eye)
+                right_ear = compute_ear(right_eye)
+                
+                ear = (left_ear + right_ear) / 2.0
+                
+                # Draw eye landmarks
+                for (x, y) in left_eye:
+                    cv2.circle(frame, (x, y), 2, (0, 255, 0), -1)
+                for (x, y) in right_eye:
+                    cv2.circle(frame, (x, y), 2, (0, 255, 0), -1)
+                
+                # Check if EAR is below the threshold
+                if ear < EAR_THRESHOLD:
+                    counter += 1
+                    if counter >= CONSEC_FRAMES:
+                        cv2.putText(frame, "DROWSINESS DETECTED!", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                        control_motor(drowsy=True)
+                else:
+                    counter = 0
+                    control_motor(drowsy=False)
+        
+        cv2.imshow("Drowsiness Detection", frame)
+        
+        if cv2.waitKey(1) & 0xFF == 27:  # Press 'Esc' to exit
+            break
 
-cap.release()
-cv2.destroyAllWindows()
+finally:
+    # Cleanup
+    cap.release()
+    cv2.destroyAllWindows()
+    pwm.stop()
+    GPIO.cleanup()
