@@ -5,23 +5,12 @@ from scipy.spatial import distance as dist
 import RPi.GPIO as GPIO
 import time
 
-# Setup GPIO for motor, LEDs, and buzzer
+# Setup GPIO for motor control
 MOTOR_PIN = 18  # Use PWM on this pin to control speed
-RED_LED_PIN = 22  # Red LED for drowsiness alert
-GREEN_LED_PIN = 23  # Green LED for normal state
-BUZZER_PIN = 24  # Buzzer for drowsiness alert
-
 GPIO.setmode(GPIO.BCM)
-
-# Motor setup
 GPIO.setup(MOTOR_PIN, GPIO.OUT)
 pwm = GPIO.PWM(MOTOR_PIN, 100)  # PWM at 100Hz
 pwm.start(0)  # Start with 0% duty cycle (motor off)
-
-# LEDs and Buzzer setup
-GPIO.setup(RED_LED_PIN, GPIO.OUT)
-GPIO.setup(GREEN_LED_PIN, GPIO.OUT)
-GPIO.setup(BUZZER_PIN, GPIO.OUT)
 
 # Initialize Mediapipe FaceMesh
 mp_face_mesh = mp.solutions.face_mesh
@@ -51,20 +40,14 @@ CONSEC_FRAMES = 20
 counter = 0
 motor_running = True  # Initially, the motor is running
 
-# Function to control motor, LEDs, and buzzer
-def control_alerts(drowsy):
+# Function to control motor speed
+def control_motor(drowsy):
     if drowsy:
         pwm.ChangeDutyCycle(0)  # Stop the motor if drowsy
-        GPIO.output(RED_LED_PIN, GPIO.HIGH)  # Turn on red LED
-        GPIO.output(GREEN_LED_PIN, GPIO.LOW)  # Turn off green LED
-        GPIO.output(BUZZER_PIN, GPIO.HIGH)  # Turn on buzzer
-        print("Drowsiness detected! Motor stopped, red LED and buzzer ON.")
+        print("Motor stopped due to drowsiness.")
     else:
         pwm.ChangeDutyCycle(70)  # Set motor speed to 70% when not drowsy
-        GPIO.output(RED_LED_PIN, GPIO.LOW)  # Turn off red LED
-        GPIO.output(GREEN_LED_PIN, GPIO.HIGH)  # Turn on green LED
-        GPIO.output(BUZZER_PIN, GPIO.LOW)  # Turn off buzzer
-        print("All is normal. Motor running, green LED ON.")
+        print("Motor running.")
 
 # Start capturing video
 cap = cv2.VideoCapture(0)
@@ -102,10 +85,10 @@ try:
                     counter += 1
                     if counter >= CONSEC_FRAMES:
                         cv2.putText(frame, "DROWSINESS DETECTED!", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-                        control_alerts(drowsy=True)
+                        control_motor(drowsy=True)
                 else:
                     counter = 0
-                    control_alerts(drowsy=False)
+                    control_motor(drowsy=False)
         
         cv2.imshow("Drowsiness Detection", frame)
         
