@@ -5,20 +5,23 @@ from scipy.spatial import distance as dist
 import RPi.GPIO as GPIO
 import time
 
-# GPIO pin configuration
-ENA = 4  # PWM pin for speed control
-IN1 = 17  # Direction control pin 1
-IN2 = 27  # Direction control pin 2
+# Setup GPIO for motor, LEDs, and buzzer
+MOTOR_PIN = 18  # Use PWM on this pin to control speed
+RED_LED_PIN = 22  # Red LED for drowsiness alert
+GREEN_LED_PIN = 23  # Green LED for normal state
+BUZZER_PIN = 24  # Buzzer for drowsiness alert
 
-# Setup GPIO
 GPIO.setmode(GPIO.BCM)
-GPIO.setup(ENA, GPIO.OUT)
-GPIO.setup(IN1, GPIO.OUT)
-GPIO.setup(IN2, GPIO.OUT)
 
-# PWM setup on ENA pin
-pwm = GPIO.PWM(ENA, 100)  # PWM on ENA with 100Hz frequency
-pwm.start(0)  # Initially, the motor is off
+# Motor setup
+GPIO.setup(MOTOR_PIN, GPIO.OUT)
+pwm = GPIO.PWM(MOTOR_PIN, 100)  # PWM at 100Hz
+pwm.start(0)  # Start with 0% duty cycle (motor off)
+
+# LEDs and Buzzer setup
+GPIO.setup(RED_LED_PIN, GPIO.OUT)
+GPIO.setup(GREEN_LED_PIN, GPIO.OUT)
+GPIO.setup(BUZZER_PIN, GPIO.OUT)
 
 # Initialize Mediapipe FaceMesh
 mp_face_mesh = mp.solutions.face_mesh
@@ -48,20 +51,20 @@ CONSEC_FRAMES = 20
 counter = 0
 motor_running = True  # Initially, the motor is running
 
-# Function to control motor speed and direction
-def control_motor(drowsy):
+# Function to control motor, LEDs, and buzzer
+def control_alerts(drowsy):
     if drowsy:
-        # Stop the motor by setting IN1 and IN2 to LOW and duty cycle to 0
-        GPIO.output(IN1, GPIO.LOW)
-        GPIO.output(IN2, GPIO.LOW)
-        pwm.ChangeDutyCycle(0)
-        print("Motor stopped due to drowsiness.")
+        pwm.ChangeDutyCycle(0)  # Stop the motor if drowsy
+        GPIO.output(RED_LED_PIN, GPIO.HIGH)  # Turn on red LED
+        GPIO.output(GREEN_LED_PIN, GPIO.LOW)  # Turn off green LED
+        GPIO.output(BUZZER_PIN, GPIO.HIGH)  # Turn on buzzer
+        print("Drowsiness detected! Motor stopped, red LED and buzzer ON.")
     else:
-        # Run the motor forward with 70% speed
-        GPIO.output(IN1, GPIO.HIGH)
-        GPIO.output(IN2, GPIO.LOW)
-        pwm.ChangeDutyCycle(70)
-        print("Motor running at 70% speed.")
+        pwm.ChangeDutyCycle(70)  # Set motor speed to 70% when not drowsy
+        GPIO.output(RED_LED_PIN, GPIO.LOW)  # Turn off red LED
+        GPIO.output(GREEN_LED_PIN, GPIO.HIGH)  # Turn on green LED
+        GPIO.output(BUZZER_PIN, GPIO.LOW)  # Turn off buzzer
+        print("All is normal. Motor running, green LED ON.")
 
 # Start capturing video
 cap = cv2.VideoCapture(0)
@@ -99,10 +102,10 @@ try:
                     counter += 1
                     if counter >= CONSEC_FRAMES:
                         cv2.putText(frame, "DROWSINESS DETECTED!", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-                        control_motor(drowsy=True)
+                        control_alerts(drowsy=True)
                 else:
                     counter = 0
-                    control_motor(drowsy=False)
+                    control_alerts(drowsy=False)
         
         cv2.imshow("Drowsiness Detection", frame)
         
